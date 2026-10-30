@@ -3,45 +3,301 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Manage Students</title>
+  <title>Manage Products</title>
   <link rel="stylesheet" href="style.css">
-  <script src="config.js" defer></script>
-  <script src="app.js" defer></script>
 </head>
 <body>
   <main>
     <a href="index.html">Home</a>
-    <h1>Manage Students</h1>
-    <p>Use fictional student information for this exercise.</p>
-    <h2 id="form-title">Add student</h2>
-    <form id="student-form" novalidate>
+    <h1>Manage Products</h1>
+    <h2 id="form-title">Add product</h2>
+    <form id="product-form" novalidate>
       <label for="name">Name (2–50 characters)</label>
-      <input id="name" name="name" required minlength="2" maxlength="50">
-      <label for="age">Age (1–120)</label>
-      <input id="age" name="age" type="number" required min="1" max="120" step="1">
-      <label for="major">Major (2–60 characters)</label>
-      <input id="major" name="major" required minlength="2" maxlength="60">
-      <label for="year">Study year (1–6)</label>
-      <input id="year" name="year" type="number" required min="1" max="6" step="1">
+      <input id="name" required minlength="2" maxlength="50">
+      <label for="category">Category</label>
+      <select id="category" required>
+        <option value="">Choose a category</option>
+        <option value="Stationery">Stationery</option>
+        <option value="Electronics">Electronics</option>
+        <option value="Home">Home</option>
+      </select>
+      <label for="price">Price (KRW, 0–100,000,000)</label>
+      <input id="price" type="number" required min="0" max="100000000" step="1">
+      <label for="stock">Stock (0–100,000)</label>
+      <input id="stock" type="number" required min="0" max="100000" step="1">
+      <label for="description">Description (5–200 characters)</label>
+      <textarea id="description" required minlength="5" maxlength="200"></textarea>
       <div class="actions">
-        <button id="save" type="submit">Add student</button>
-        <button id="cancel" type="button">Cancel edit</button>
+        <button id="save" type="submit">Add product</button>
+        <button id="cancel" type="button" hidden>Cancel edit</button>
       </div>
     </form>
     <p id="message" role="status" aria-live="polite"></p>
     <section aria-labelledby="list-title">
-      <h2 id="list-title">Students</h2>
-      <label for="search">Search by name or major</label>
+      <h2 id="list-title">Products</h2>
+      <label for="search">Search by name or category</label>
       <input id="search" type="search">
       <button id="refresh" type="button">Refresh list</button>
       <p id="count"></p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Age</th><th>Major</th><th>Year</th><th>Actions</th></tr></thead>
-          <tbody id="student-list"></tbody>
+          <thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Price (KRW)</th><th>Stock</th><th>Description</th><th>Actions</th></tr></thead>
+          <tbody id="product-list"></tbody>
         </table>
       </div>
     </section>
   </main>
+  <script>
+    const API_URL = "https://6adea6f34e88f1bba4a53b44.mockapi.io/students";
+
+    let products = [];
+    let editingId = null;
+    let busy = false;
+    const form = document.getElementById("product-form");
+    const message = document.getElementById("message");
+    const list = document.getElementById("product-list");
+    const nameInput = document.getElementById("name");
+    const categoryInput = document.getElementById("category");
+    const priceInput = document.getElementById("price");
+    const stockInput = document.getElementById("stock");
+    const descriptionInput = document.getElementById("description");
+    const searchInput = document.getElementById("search");
+
+    function showMessage(text, isError = false) {
+      message.textContent = text;
+      if (isError) {
+        message.className = "error";
+      } else {
+        message.className = "";
+      }
+    }
+
+    function setBusy(value) {
+      busy = value;
+      document.querySelectorAll("button").forEach(function (button) {
+        button.disabled = value;
+      });
+    }
+
+    async function loadProducts() {
+      const response = await fetch(API_URL);
+      if (!response.ok) {
+        throw new Error("Request failed (HTTP " + response.status + ").");
+      }
+      products = await response.json();
+      renderProducts();
+    }
+
+    function renderProducts() {
+      list.innerHTML = "";
+      const keyword = searchInput.value.trim().toLowerCase();
+      const visibleProducts = products.filter(function (product) {
+        return (product.name + " " + product.category).toLowerCase().includes(keyword);
+      });
+      visibleProducts.forEach(function (product) {
+        const row = document.createElement("tr");
+        const values = [product.id, product.name, product.category, product.price, product.stock, product.description];
+        values.forEach(function (value) {
+          const cell = document.createElement("td");
+          if (value === undefined || value === null) {
+            cell.textContent = "—";
+          } else {
+            cell.textContent = value;
+          }
+          row.appendChild(cell);
+        });
+        const actions = document.createElement("td");
+        const editButton = document.createElement("button");
+        editButton.textContent = "Edit";
+        editButton.disabled = busy;
+        editButton.addEventListener("click", function () {
+          editProduct(product.id);
+        });
+        const deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+        deleteButton.disabled = busy;
+        deleteButton.addEventListener("click", function () {
+          deleteProduct(product.id);
+        });
+        actions.appendChild(editButton);
+        actions.appendChild(deleteButton);
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
+      if (visibleProducts.length === 0) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 7;
+        cell.textContent = "No products found.";
+        row.appendChild(cell);
+        list.appendChild(row);
+      }
+      document.querySelector("#count").textContent = visibleProducts.length + " of " + products.length + " products";
+    }
+
+    function resetForm() {
+      editingId = null;
+      form.reset();
+      document.querySelector("#form-title").textContent = "Add product";
+      document.querySelector("#save").textContent = "Add product";
+      document.querySelector("#cancel").hidden = true;
+    }
+
+    function readForm() {
+      const product = {
+        name: nameInput.value.trim(),
+        category: categoryInput.value,
+        price: Number(priceInput.value),
+        stock: Number(stockInput.value),
+        description: descriptionInput.value.trim()
+      };
+      if (product.name.length < 2 || product.name.length > 50) {
+        showMessage("Name must contain 2–50 characters.", true);
+        return null;
+      }
+      if (product.category === "") {
+        showMessage("Choose a category.", true);
+        return null;
+      }
+      if (priceInput.value === "" || !Number.isInteger(product.price) || product.price < 0 || product.price > 100000000) {
+        showMessage("Price must be a whole number between 0 and 100,000,000.", true);
+        return null;
+      }
+      if (stockInput.value === "" || !Number.isInteger(product.stock) || product.stock < 0 || product.stock > 100000) {
+        showMessage("Stock must be a whole number between 0 and 100,000.", true);
+        return null;
+      }
+      if (product.description.length < 5 || product.description.length > 200) {
+        showMessage("Description must contain 5–200 characters.", true);
+        return null;
+      }
+      return product;
+    }
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      if (busy) {
+        return;
+      }
+      const product = readForm();
+      if (product === null) {
+        return;
+      }
+
+      let url = API_URL;
+      let method = "POST";
+      if (editingId !== null) {
+        url = API_URL + "/" + encodeURIComponent(editingId);
+        method = "PATCH";
+      }
+      let saved = false;
+      setBusy(true);
+      showMessage("Saving...");
+      try {
+        const response = await fetch(url, {
+          method: method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(product)
+        });
+        if (!response.ok) {
+          throw new Error("Request failed (HTTP " + response.status + ").");
+        }
+        saved = true;
+        resetForm();
+        await loadProducts();
+        showMessage("Product saved.");
+      } catch (error) {
+        if (saved) {
+          showMessage("Saved, but list refresh failed. Use Refresh list. " + error.message, true);
+        } else {
+          showMessage(error.message, true);
+        }
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    async function editProduct(id) {
+      if (busy) {
+        return;
+      }
+      setBusy(true);
+      showMessage("Loading product...");
+      try {
+        const response = await fetch(API_URL + "/" + encodeURIComponent(id));
+        if (!response.ok) {
+          throw new Error("Request failed (HTTP " + response.status + ").");
+        }
+        const product = await response.json();
+        editingId = product.id;
+        nameInput.value = product.name;
+        categoryInput.value = product.category;
+        priceInput.value = product.price;
+        stockInput.value = product.stock;
+        descriptionInput.value = product.description;
+        document.querySelector("#form-title").textContent = "Edit product " + product.id;
+        document.querySelector("#save").textContent = "Save changes";
+        document.querySelector("#cancel").hidden = false;
+        nameInput.focus();
+        showMessage("Product ready to edit.");
+      } catch (error) {
+        showMessage(error.message, true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function deleteProduct(id) {
+      if (busy) {
+        return;
+      }
+      if (!confirm("Delete this product?")) {
+        return;
+      }
+      setBusy(true);
+      let deleted = false;
+      try {
+        const response = await fetch(API_URL + "/" + encodeURIComponent(id), { method: "DELETE" });
+        if (!response.ok) {
+          throw new Error("Request failed (HTTP " + response.status + ").");
+        }
+        deleted = true;
+        if (editingId === id) {
+          resetForm();
+        }
+        await loadProducts();
+        showMessage("Product deleted.");
+      } catch (error) {
+        if (deleted) {
+          showMessage("Deleted, but list refresh failed. Use Refresh list. " + error.message, true);
+        } else {
+          showMessage(error.message, true);
+        }
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function refreshProducts() {
+      if (busy) {
+        return;
+      }
+      setBusy(true);
+      showMessage("Loading products...");
+      try {
+        await loadProducts();
+        showMessage("Product list loaded.");
+      } catch (error) {
+        showMessage(error.message, true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    document.querySelector("#cancel").addEventListener("click", resetForm);
+    document.querySelector("#refresh").addEventListener("click", refreshProducts);
+    searchInput.addEventListener("input", renderProducts);
+    refreshProducts();
+  </script>
 </body>
 </html>

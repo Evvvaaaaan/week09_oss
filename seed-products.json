@@ -1,0 +1,5 @@
+[
+  {"name":"Notebook","category":"Stationery","price":3000,"stock":20,"description":"A lined paper notebook."},
+  {"name":"Desk lamp","category":"Electronics","price":18000,"stock":8,"description":"An adjustable reading lamp."},
+  {"name":"Storage basket","category":"Home","price":7000,"stock":12,"description":"A small reusable storage basket."}
+]
